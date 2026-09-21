@@ -57,6 +57,55 @@ def generate_wallets(count: int = 1) -> list:
     return [generate_wallet() for _ in range(count)]
 
 
+def wallet_from_private_key_hex(private_key_hex: str) -> dict:
+    value = private_key_hex.strip()
+    if len(value) != 64:
+        raise ValueError("Private key must be exactly 64 hex characters.")
+
+    try:
+        private_key = bytes.fromhex(value)
+    except ValueError as exc:
+        raise ValueError("Private key is not valid hexadecimal.") from exc
+
+    return {
+        "private_key_hex": private_key.hex(),
+        "wif": private_key_to_wif(private_key),
+        "bitcoin_address": private_key_to_address(private_key),
+    }
+
+
+def wallet_from_wif(wif: str) -> dict:
+    value = wif.strip()
+    try:
+        decoded = base58.b58decode(value)
+    except ValueError as exc:
+        raise ValueError("WIF is not valid Base58.") from exc
+
+    if len(decoded) < 5:
+        raise ValueError("WIF is too short.")
+
+    payload = decoded[:-4]
+    expected_checksum = sha256(sha256(payload))[:4]
+    if decoded[-4:] != expected_checksum:
+        raise ValueError("WIF checksum is invalid.")
+
+    if payload[0] != 0x80:
+        raise ValueError("WIF version byte is invalid.")
+
+    private_key = payload[1:]
+    if len(private_key) == 33 and private_key[-1] == 0x01:
+        private_key = private_key[:-1]
+
+    if len(private_key) != 32:
+        raise ValueError("WIF private key length is invalid.")
+
+    return {
+        "private_key_hex": private_key.hex(),
+        "wif": private_key_to_wif(private_key),
+        "bitcoin_address": private_key_to_address(private_key),
+    }
+
+
 def validate_bitcoin_address(address: str) -> bool:
     if not address or len(address) < 26 or len(address) > 35:
         return False

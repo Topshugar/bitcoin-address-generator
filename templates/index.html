@@ -4,7 +4,12 @@ import io
 import qrcode
 from flask import Flask, render_template, jsonify, request
 
-from bitcoin_address_generator import generate_wallets, validate_bitcoin_address
+from bitcoin_address_generator import (
+    generate_wallets,
+    validate_bitcoin_address,
+    wallet_from_private_key_hex,
+    wallet_from_wif,
+)
 
 app = Flask(__name__)
 
@@ -21,7 +26,24 @@ def generate_qr_data_url(value: str) -> str:
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    import_type = request.form.get("import_type")
+    import_value = request.form.get("import_value", "")
+    wallets = []
     count = request.form.get("count", 1, type=int)
+
+    if import_type and import_value:
+        try:
+            if import_type == "hex":
+                wallet = wallet_from_private_key_hex(import_value)
+            else:
+                wallet = wallet_from_wif(import_value)
+
+            wallet["qr_code"] = generate_qr_data_url(wallet["bitcoin_address"])
+            wallets = [wallet]
+            return render_template("index.html", wallets=wallets, count=1, imported_message="Wallet imported successfully.")
+        except ValueError as exc:
+            return render_template("index.html", wallets=[], count=1, error_message=str(exc))
+
     if count < 1:
         count = 1
     if count > 20:
