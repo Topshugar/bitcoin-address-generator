@@ -1,79 +1,133 @@
-import base64
-import io
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bitcoin Wallet Dashboard</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --field:#0b1220; --text:#f8fafc; --muted:#cbd5e1; --accent:#f59e0b; --good:#4ade80; --bad:#f87171; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:24px; min-height:100vh; background:linear-gradient(135deg,var(--bg),#111827); color:var(--text); font:16px Arial,sans-serif; }
+    body.light { --bg:#e2e8f0; --card:#fff; --field:#f8fafc; --text:#0f172a; --muted:#475569; --accent:#b45309; }
+    main { max-width:1100px; margin:auto; }
+    .panel,.wallet { background:var(--card); border:1px solid #475569; border-radius:14px; padding:20px; box-shadow:0 8px 24px #0004; }
+    header,.row,.actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    header { justify-content:space-between; }
+    h1 { color:var(--accent); margin:0 0 16px; }
+    h2 { margin-top:0; }
+    label { color:var(--muted); font-weight:bold; }
+    input,select,button { border-radius:8px; padding:11px 13px; font:inherit; }
+    input,select { background:var(--field); color:var(--text); border:1px solid #64748b; flex:1; min-width:180px; }
+    button { background:var(--accent); color:#111827; border:0; font-weight:bold; cursor:pointer; }
+    button.secondary { background:#22c55e; }
+    button.ghost { background:transparent; color:var(--text); border:1px solid #64748b; }
+    .section { margin-top:20px; }
+    .notice { margin-top:12px; padding:10px; color:var(--good); }
+    .error { color:var(--bad); }
+    .wallet-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:16px; margin-top:20px; }
+    .wallet h3 { color:var(--accent); margin-top:0; }
+    .field { margin:12px 0; }
+    .value { background:var(--field); border:1px solid #475569; border-radius:8px; padding:10px; word-break:break-all; }
+    .qr { display:block; width:130px; height:130px; margin:14px auto; background:#fff; padding:6px; border-radius:8px; }
+    .balance { color:var(--muted); margin-top:10px; min-height:22px; }
+    small { color:var(--muted); display:block; margin-top:12px; }
+  </style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <header><h1>Bitcoin Wallet Dashboard</h1><button class="ghost" id="theme" type="button">Toggle theme</button></header>
+    <p>Educational demo for legacy Bitcoin mainnet addresses.</p>
 
-import qrcode
-from flask import Flask, render_template, jsonify, request
+    <form method="post" class="section">
+      <div class="row">
+        <label for="count">Generate wallets</label>
+        <input id="count" name="count" type="number" min="1" max="20" value="{{ count|default(1) }}">
+        <button type="submit">Generate</button>
+        <button class="secondary" id="csv" type="button">Export CSV</button>
+      </div>
+    </form>
 
-from bitcoin_address_generator import (
-    generate_wallets,
-    validate_bitcoin_address,
-    wallet_from_private_key_hex,
-    wallet_from_wif,
-)
+    <form method="post" class="section">
+      <div class="row">
+        <select name="import_type" aria-label="Import type">
+          <option value="hex">Private key hex</option>
+          <option value="wif">WIF</option>
+        </select>
+        <input name="import_value" type="text" placeholder="Paste a private key or WIF">
+        <button type="submit">Import wallet</button>
+      </div>
+    </form>
 
-app = Flask(__name__)
+    {% if error_message %}<div class="notice error">{{ error_message }}</div>{% endif %}
+    {% if imported_message %}<div class="notice">{{ imported_message }}</div>{% endif %}
 
+    <div class="section">
+      <div class="row">
+        <input id="address" type="text" placeholder="Bitcoin address to validate or check">
+        <button class="secondary" id="validate" type="button">Validate</button>
+        <button id="balance" type="button">Check balance</button>
+      </div>
+      <div id="status" class="notice"></div>
+    </div>
 
-def generate_qr_data_url(value: str) -> str:
-    qr = qrcode.QRCode(version=1, box_size=10, border=4)
-    qr.add_data(value)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
+    <div id="wallets" class="wallet-grid">
+      {% for wallet in wallets %}
+      <article class="wallet" data-wallet="{{ wallet.private_key_hex }}|{{ wallet.wif }}|{{ wallet.bitcoin_address }}">
+        <h3>Wallet {{ loop.index }}</h3>
+        <div class="field"><label>Private key</label><div class="value">{{ wallet.private_key_hex }}</div></div>
+        <div class="field"><label>WIF</label><div class="value">{{ wallet.wif }}</div></div>
+        <div class="field"><label>Address</label><div class="value address-value">{{ wallet.bitcoin_address }}</div></div>
+        <img class="qr" src="{{ wallet.qr_code }}" alt="QR code for {{ wallet.bitcoin_address }}">
+        <div class="actions">
+          <button type="button" class="copy" data-value="{{ wallet.bitcoin_address }}">Copy address</button>
+          <button type="button" class="copy secondary" data-value="{{ wallet.private_key_hex }}">Copy key</button>
+          <button type="button" class="wallet-balance" data-address="{{ wallet.bitcoin_address }}">Balance</button>
+        </div>
+        <div class="balance"></div>
+      </article>
+      {% endfor %}
+    </div>
+    <small>Never use this demo with real funds or paste real private keys into a website.</small>
+  </section>
+</main>
+<script>
+  const $ = (selector, root=document) => root.querySelector(selector);
+  const status = $('#status');
+  const setStatus = (text, good=true) => { status.textContent=text; status.className='notice '+(good?'':'error'); };
+  $('#theme').onclick = () => { document.body.classList.toggle('light'); localStorage.setItem('theme', document.body.classList.contains('light')?'light':'dark'); };
+  if (localStorage.getItem('theme') === 'light') document.body.classList.add('light');
 
+  document.querySelectorAll('.copy').forEach(button => button.onclick = async () => {
+    try { await navigator.clipboard.writeText(button.dataset.value); setStatus('Copied to clipboard.'); }
+    catch (_) { setStatus('Clipboard access failed.', false); }
+  });
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    import_type = request.form.get("import_type")
-    import_value = request.form.get("import_value", "")
-    wallets = []
-    count = request.form.get("count", 1, type=int)
+  $('#validate').onclick = async () => {
+    const address = $('#address').value.trim();
+    if (!address) return setStatus('Enter an address first.', false);
+    const response = await fetch('/api/validate?address=' + encodeURIComponent(address));
+    const data = await response.json();
+    setStatus(data.valid ? 'Valid legacy Bitcoin address.' : 'Invalid legacy Bitcoin address.', data.valid);
+  };
 
-    if import_type and import_value:
-        try:
-            if import_type == "hex":
-                wallet = wallet_from_private_key_hex(import_value)
-            else:
-                wallet = wallet_from_wif(import_value)
+  async function checkBalance(address, output) {
+    output.textContent = 'Checking…';
+    try {
+      const response = await fetch('/api/balance?address=' + encodeURIComponent(address));
+      const data = await response.json();
+      output.textContent = response.ok ? `${data.confirmed_btc} BTC confirmed; ${data.pending_btc} BTC pending` : data.error;
+    } catch (_) { output.textContent = 'Balance request failed.'; }
+  }
+  $('#balance').onclick = () => { const address=$('#address').value.trim(); if(address) checkBalance(address,status); else setStatus('Enter an address first.',false); };
+  document.querySelectorAll('.wallet-balance').forEach(button => button.onclick = () => checkBalance(button.dataset.address, $('.balance', button.closest('.wallet'))));
 
-            wallet["qr_code"] = generate_qr_data_url(wallet["bitcoin_address"])
-            wallets = [wallet]
-            return render_template("index.html", wallets=wallets, count=1, imported_message="Wallet imported successfully.")
-        except ValueError as exc:
-            return render_template("index.html", wallets=[], count=1, error_message=str(exc))
-
-    if count < 1:
-        count = 1
-    if count > 20:
-        count = 20
-
-    wallets = generate_wallets(count)
-    for wallet in wallets:
-        wallet["qr_code"] = generate_qr_data_url(wallet["bitcoin_address"])
-    return render_template("index.html", wallets=wallets, count=count)
-
-
-@app.route("/api/generate")
-def api_generate():
-    count = request.args.get("count", default=1, type=int)
-    if count < 1:
-        count = 1
-    if count > 20:
-        count = 20
-
-    wallets = generate_wallets(count)
-    for wallet in wallets:
-        wallet["qr_code"] = generate_qr_data_url(wallet["bitcoin_address"])
-    return jsonify({"wallets": wallets})
-
-
-@app.route("/api/validate")
-def api_validate():
-    address = request.args.get("address", "")
-    return jsonify({"valid": validate_bitcoin_address(address), "address": address})
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+  $('#csv').onclick = () => {
+    const rows=[['Wallet','Private key hex','WIF','Bitcoin address']];
+    document.querySelectorAll('.wallet').forEach((wallet,i) => rows.push([i+1,...wallet.dataset.wallet.split('|')]));
+    const csv=rows.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\n');
+    const link=document.createElement('a'); link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); link.download='bitcoin-wallets.csv'; link.click();
+  };
+</script>
+</body>
+</html>
