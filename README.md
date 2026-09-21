@@ -1,58 +1,197 @@
-# Bitcoin Address Generator
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bitcoin Address Generator</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-soft: #1f2937;
+        --text: #f8fafc;
+        --muted: #cbd5e1;
+        --highlight: #f59e0b;
+        --highlight-2: #22c55e;
+        --border: #374151;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #0f172a, #111827);
+        color: var(--text);
+        min-height: 100vh;
+        padding: 32px 16px;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .card {
+        background: rgba(17, 24, 39, 0.9);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+      }
+      h1 {
+        margin-top: 0;
+        color: var(--highlight);
+      }
+      .controls {
+        display: flex;
+        gap: 12px;
+        margin: 20px 0 28px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      input[type="number"] {
+        background: #0f172a;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        width: 110px;
+      }
+      button {
+        background: var(--highlight);
+        color: #0f172a;
+        border: 0;
+        border-radius: 8px;
+        padding: 12px 18px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: var(--highlight-2);
+        color: #052e16;
+      }
+      .wallet-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 20px;
+      }
+      .wallet {
+        background: rgba(31, 41, 55, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+      }
+      .wallet h3 {
+        margin-top: 0;
+        color: var(--highlight);
+      }
+      .field {
+        margin-bottom: 12px;
+      }
+      label {
+        display: block;
+        font-weight: bold;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .value {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        word-break: break-all;
+        color: var(--text);
+      }
+      .validation {
+        margin-top: 18px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .validation input {
+        flex: 1;
+        min-width: 260px;
+        background: #0f172a;
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 12px 14px;
+      }
+      .status {
+        font-weight: bold;
+        min-width: 120px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>Bitcoin Address Generator</h1>
 
-This project generates a random Bitcoin private key and derives a Bitcoin wallet address using the secp256k1 curve.
+        <form method="post">
+          <div class="controls">
+            <label for="count">Generate wallets:</label>
+            <input id="count" name="count" type="number" min="1" max="20" value="{{ count }}" />
+            <button type="submit">Generate</button>
+          </div>
+        </form>
 
-## Features
+        <div class="validation">
+          <input id="addressInput" type="text" placeholder="Enter a Bitcoin address to validate" />
+          <button class="secondary" type="button" id="validateBtn">Validate</button>
+          <div class="status" id="validationStatus">Waiting...</div>
+        </div>
 
-- Generates a random 32-byte private key
-- Derives a compressed Bitcoin public key
-- Creates a Bitcoin address in Base58Check format
-- Exports the wallet in WIF format
-- Includes a simple Flask web interface for generating wallet data in the browser
+        <div class="wallet-grid" style="margin-top: 24px;">
+          {% for wallet in wallets %}
+          <div class="wallet">
+            <h3>Wallet {{ loop.index }}</h3>
 
-## Requirements
+            <div class="field">
+              <label>Private Key (hex)</label>
+              <div class="value">{{ wallet.private_key_hex }}</div>
+            </div>
 
-Python 3.9+
+            <div class="field">
+              <label>WIF</label>
+              <div class="value">{{ wallet.wif }}</div>
+            </div>
 
-Install the required dependency:
+            <div class="field">
+              <label>Bitcoin Address</label>
+              <div class="value">{{ wallet.bitcoin_address }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
 
-```bash
-pip install -r requirements.txt
-```
+    <script>
+      document.getElementById('validateBtn').addEventListener('click', function () {
+        const address = document.getElementById('addressInput').value.trim();
+        const statusEl = document.getElementById('validationStatus');
 
-## Run the script
+        if (!address) {
+          statusEl.textContent = 'Enter an address';
+          statusEl.style.color = '#fbbf24';
+          return;
+        }
 
-```bash
-python bitcoin_address_generator.py
-```
-
-## Run the web app
-
-```bash
-python app.py
-```
-
-Then open:
-
-```text
-http://127.0.0.1:5000/
-```
-
-## Example Output
-
-```text
-Private key (hex): 5c27e6d9a4f6d8f7d1c9d4d7f0d2f7f8d6e7d3a7b6d4c6b5f6e7d9b4a3c2d1
-WIF: 5HueCGU8rMjxQhvkeCw5k5m7n8Hf8mJvJ7J5T1Y3YJH2w5K5Wg2
-Bitcoin address: 1J7d8Y4Q8t3S8mT8G8M2p8tP8pW4u7H7pY
-```
-
-## Important
-
-This is an educational project for learning Bitcoin address generation. It is not a production wallet and should not be used to store real funds.
-
-## File Structure
-
-- `bitcoin_address_generator.py` — main wallet generation logic
-- `app.py` — Flask web application
-- `templates/index.html` — front-end UI
-- `requirements.txt` — Python dependencies
+        fetch('/api/validate?address=' + encodeURIComponent(address))
+          .then(response => response.json())
+          .then(data => {
+            if (data.valid) {
+              statusEl.textContent = 'Valid Bitcoin address';
+              statusEl.style.color = '#4ade80';
+            } else {
+              statusEl.textContent = 'Invalid Bitcoin address';
+              statusEl.style.color = '#f87171';
+            }
+          })
+          .catch(() => {
+            statusEl.textContent = 'Error';
+            statusEl.style.color = '#f87171';
+          });
+      });
+    </script>
+  </body>
+</html>
