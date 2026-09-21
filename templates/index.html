@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bitcoin Address Generator</title>
+    <style>
+      :root {
+        --bg: #121826;
+        --card: #1f2937;
+        --text: #f9fafb;
+        --muted: #cbd5e1;
+        --accent: #f59e0b;
+        --border: #374151;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: linear-gradient(135deg, #0f172a, #111827);
+        color: var(--text);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .card {
+        background: rgba(31, 41, 55, 0.9);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        width: min(900px, 90vw);
+        padding: 24px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+      }
+      h1 {
+        margin-top: 0;
+        color: var(--accent);
+      }
+      .field {
+        margin-bottom: 18px;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-weight: bold;
+      }
+      .value {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        word-break: break-all;
+        color: #f8fafc;
+      }
+      form {
+        margin-top: 20px;
+      }
+      button {
+        background: var(--accent);
+        color: #111827;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 18px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      button:hover {
+        filter: brightness(1.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Bitcoin Address Generator</h1>
+
+      <div class="field">
+        <label>Private Key (hex)</label>
+        <div class="value">{{ wallet.private_key_hex }}</div>
+      </div>
+
+      <div class="field">
+        <label>WIF</label>
+        <div class="value">{{ wallet.wif }}</div>
+      </div>
+
+      <div class="field">
+        <label>Bitcoin Address</label>
+        <div class="value">{{ wallet.bitcoin_address }}</div>
+      </div>
+
+      <form method="post">
+        <button type="submit">Generate New Wallet</button>
+      </form>
+    </div>
+  </body>
+</html>

@@ -42,8 +42,17 @@ def generate_random_private_key() -> bytes:
     return os.urandom(32)
 
 
+def generate_wallet() -> dict:
+    private_key = generate_random_private_key()
+    return {
+        "private_key_hex": private_key.hex(),
+        "wif": private_key_to_wif(private_key),
+        "bitcoin_address": private_key_to_address(private_key),
+    }
+
+
 if __name__ == "__main__":
-    priv = generate_random_private_key()
-    print("Private key (hex):", priv.hex())
-    print("WIF:", private_key_to_wif(priv))
-    print("Bitcoin address:", private_key_to_address(priv))
+    wallet = generate_wallet()
+    print("Private key (hex):", wallet["private_key_hex"])
+    print("WIF:", wallet["wif"])
+    print("Bitcoin address:", wallet["bitcoin_address"])

@@ -8,6 +8,7 @@ This project generates a random Bitcoin private key and derives a Bitcoin wallet
 - Derives a compressed Bitcoin public key
 - Creates a Bitcoin address in Base58Check format
 - Exports the wallet in WIF format
+- Includes a simple Flask web interface for generating wallet data in the browser
 
 ## Requirements
 
@@ -16,13 +17,25 @@ Python 3.9+
 Install the required dependency:
 
 ```bash
-pip install ecdsa
+pip install -r requirements.txt
 ```
 
-## Run
+## Run the script
 
 ```bash
 python bitcoin_address_generator.py
+```
+
+## Run the web app
+
+```bash
+python app.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5000/
 ```
 
 ## Example Output
@@ -39,4 +52,7 @@ This is an educational project for learning Bitcoin address generation. It is no
 
 ## File Structure
 
-- `bitcoin_address_generator.py` — main script
+- `bitcoin_address_generator.py` — main wallet generation logic
+- `app.py` — Flask web application
+- `templates/index.html` — front-end UI
+- `requirements.txt` — Python dependencies
