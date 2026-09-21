@@ -14,18 +14,37 @@
         --highlight: #f59e0b;
         --highlight-2: #22c55e;
         --border: #374151;
+        --danger: #f87171;
+        --success: #4ade80;
+        --warning: #fbbf24;
       }
+
+      body.light {
+        --bg: #f8fafc;
+        --panel: #ffffff;
+        --panel-soft: #e2e8f0;
+        --text: #0f172a;
+        --muted: #475569;
+        --highlight: #b45309;
+        --highlight-2: #15803d;
+        --border: #cbd5e1;
+        --danger: #dc2626;
+        --success: #15803d;
+        --warning: #a16207;
+      }
+
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: Arial, sans-serif;
-        background: linear-gradient(135deg, #0f172a, #111827);
+        background: linear-gradient(135deg, var(--bg), var(--panel));
         color: var(--text);
         min-height: 100vh;
         padding: 32px 16px;
+        transition: all 0.2s ease;
       }
       .container {
-        max-width: 1100px;
+        max-width: 1200px;
         margin: 0 auto;
       }
       .card {
@@ -35,23 +54,35 @@
         padding: 24px;
         box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
       }
+      body.light .card {
+        background: rgba(255, 255, 255, 0.9);
+      }
       h1 {
         margin-top: 0;
         color: var(--highlight);
       }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
       .controls {
         display: flex;
         gap: 12px;
-        margin: 20px 0 28px;
         align-items: center;
         flex-wrap: wrap;
       }
-      input[type="number"] {
-        background: #0f172a;
+      input[type="number"], .validation input {
+        background: var(--panel-soft);
         color: var(--text);
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 12px 14px;
+      }
+      input[type="number"] {
         width: 110px;
       }
       button {
@@ -67,16 +98,40 @@
         background: var(--highlight-2);
         color: #052e16;
       }
+      button.ghost {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .validation {
+        margin-top: 18px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .validation input {
+        flex: 1;
+        min-width: 260px;
+      }
+      .status {
+        font-weight: bold;
+        min-width: 120px;
+      }
       .wallet-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         gap: 20px;
+        margin-top: 24px;
       }
       .wallet {
         background: rgba(31, 41, 55, 0.8);
         border: 1px solid var(--border);
         border-radius: 12px;
         padding: 18px;
+      }
+      body.light .wallet {
+        background: rgba(241, 245, 249, 0.8);
       }
       .wallet h3 {
         margin-top: 0;
@@ -99,38 +154,49 @@
         word-break: break-all;
         color: var(--text);
       }
-      .validation {
-        margin-top: 18px;
+      body.light .value {
+        background: rgba(255, 255, 255, 0.9);
+      }
+      .actions {
         display: flex;
-        gap: 12px;
-        align-items: center;
+        gap: 8px;
         flex-wrap: wrap;
+        margin-top: 10px;
       }
-      .validation input {
-        flex: 1;
-        min-width: 260px;
-        background: #0f172a;
-        border: 1px solid var(--border);
-        color: var(--text);
-        border-radius: 8px;
-        padding: 12px 14px;
+      .address-qr {
+        display: block;
+        margin: 8px auto 0;
+        width: 120px;
+        height: 120px;
+        padding: 8px;
+        background: white;
+        border-radius: 10px;
       }
-      .status {
-        font-weight: bold;
-        min-width: 120px;
+      .hidden {
+        display: none;
+      }
+      @media (max-width: 600px) {
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
       }
     </style>
   </head>
-  <body>
+  <body class="dark">
     <div class="container">
       <div class="card">
-        <h1>Bitcoin Address Generator</h1>
+        <div class="topbar">
+          <h1>Bitcoin Address Generator</h1>
+          <button id="themeToggle" class="ghost" type="button">Toggle Theme</button>
+        </div>
 
         <form method="post">
           <div class="controls">
             <label for="count">Generate wallets:</label>
             <input id="count" name="count" type="number" min="1" max="20" value="{{ count }}" />
             <button type="submit">Generate</button>
+            <button class="secondary" id="exportCsvBtn" type="button">Export CSV</button>
           </div>
         </form>
 
@@ -140,9 +206,9 @@
           <div class="status" id="validationStatus">Waiting...</div>
         </div>
 
-        <div class="wallet-grid" style="margin-top: 24px;">
+        <div class="wallet-grid" id="walletGrid">
           {% for wallet in wallets %}
-          <div class="wallet">
+          <div class="wallet" data-wallet='{{ wallet.private_key_hex }}|{{ wallet.wif }}|{{ wallet.bitcoin_address }}'>
             <h3>Wallet {{ loop.index }}</h3>
 
             <div class="field">
@@ -159,6 +225,13 @@
               <label>Bitcoin Address</label>
               <div class="value">{{ wallet.bitcoin_address }}</div>
             </div>
+
+            <img class="address-qr" src="{{ wallet.qr_code }}" alt="Bitcoin address QR code" />
+
+            <div class="actions">
+              <button type="button" class="copy-btn" data-copy="{{ wallet.bitcoin_address }}">Copy Address</button>
+              <button type="button" class="copy-btn secondary" data-copy="{{ wallet.private_key_hex }}">Copy Private Key</button>
+            </div>
           </div>
           {% endfor %}
         </div>
@@ -166,6 +239,18 @@
     </div>
 
     <script>
+      const body = document.body;
+      const themeToggle = document.getElementById('themeToggle');
+      const savedTheme = localStorage.getItem('bitcoin-theme');
+      if (savedTheme === 'light') {
+        body.classList.add('light');
+      }
+
+      themeToggle.addEventListener('click', () => {
+        body.classList.toggle('light');
+        localStorage.setItem('bitcoin-theme', body.classList.contains('light') ? 'light' : 'dark');
+      });
+
       document.getElementById('validateBtn').addEventListener('click', function () {
         const address = document.getElementById('addressInput').value.trim();
         const statusEl = document.getElementById('validationStatus');
@@ -191,6 +276,47 @@
             statusEl.textContent = 'Error';
             statusEl.style.color = '#f87171';
           });
+      });
+
+      document.querySelectorAll('.copy-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+          const value = button.getAttribute('data-copy');
+          try {
+            await navigator.clipboard.writeText(value);
+            const originalText = button.textContent;
+            button.textContent = 'Copied!';
+            setTimeout(() => {
+              button.textContent = originalText;
+            }, 1200);
+          } catch (error) {
+            button.textContent = 'Copy failed';
+            setTimeout(() => {
+              button.textContent = 'Copy Address';
+            }, 1200);
+          }
+        });
+      });
+
+      document.getElementById('exportCsvBtn').addEventListener('click', () => {
+        const rows = [
+          ['Wallet #', 'Private Key (hex)', 'WIF', 'Bitcoin Address']
+        ];
+
+        document.querySelectorAll('.wallet').forEach((walletEl, index) => {
+          const values = walletEl.getAttribute('data-wallet').split('|');
+          rows.push([String(index + 1), values[0], values[1], values[2]]);
+        });
+
+        const csv = rows.map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = 'bitcoin-wallets.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       });
     </script>
   </body>

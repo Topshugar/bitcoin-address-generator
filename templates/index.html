@@ -1,7 +1,22 @@
+import base64
+import io
+
+import qrcode
 from flask import Flask, render_template, jsonify, request
-from bitcoin_address_generator import generate_wallet, generate_wallets, validate_bitcoin_address
+
+from bitcoin_address_generator import generate_wallets, validate_bitcoin_address
 
 app = Flask(__name__)
+
+
+def generate_qr_data_url(value: str) -> str:
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(value)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -9,8 +24,12 @@ def index():
     count = request.form.get("count", 1, type=int)
     if count < 1:
         count = 1
+    if count > 20:
+        count = 20
 
     wallets = generate_wallets(count)
+    for wallet in wallets:
+        wallet["qr_code"] = generate_qr_data_url(wallet["bitcoin_address"])
     return render_template("index.html", wallets=wallets, count=count)
 
 
@@ -19,7 +38,13 @@ def api_generate():
     count = request.args.get("count", default=1, type=int)
     if count < 1:
         count = 1
-    return jsonify({"wallets": generate_wallets(count)})
+    if count > 20:
+        count = 20
+
+    wallets = generate_wallets(count)
+    for wallet in wallets:
+        wallet["qr_code"] = generate_qr_data_url(wallet["bitcoin_address"])
+    return jsonify({"wallets": wallets})
 
 
 @app.route("/api/validate")
