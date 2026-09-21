@@ -1,131 +1,107 @@
-import os
-import hashlib
-import base58
+import base64
+import io
 
-# Install: pip install ecdsa
-from ecdsa import SigningKey, SECP256k1
+import qrcode
+from flask import Flask, jsonify, render_template, request
+
+from bitcoin_address_generator import (
+    generate_wallets,
+    validate_bitcoin_address,
+    wallet_from_private_key_hex,
+    wallet_from_wif,
+)
+
+app = Flask(__name__)
 
 
-def sha256(data: bytes) -> bytes:
-    return hashlib.sha256(data).digest()
+def generate_qr_data_url(value: str) -> str:
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(value)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
-def ripemd160(data: bytes) -> bytes:
+def add_qr_codes(wallets: list[dict]) -> list[dict]:
+    for wallet in wallets:
+        wallet["qr_code"] = generate_qr_data_url(wallet["bitcoin_address"])
+    return wallets
+
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    wallets = []
+    count = request.form.get("count", 1, type=int) or 1
+    error_message = None
+    imported_message = None
+
+    if request.method == "POST" and request.form.get("import_value", "").strip():
+        import_value = request.form["import_value"].strip()
+        try:
+            if request.form.get("import_type") == "wif":
+                wallet = wallet_from_wif(import_value)
+            else:
+                wallet = wallet_from_private_key_hex(import_value)
+            wallets = add_qr_codes([wallet])
+            imported_message = "Wallet imported successfully."
+        except ValueError as exc:
+            error_message = str(exc)
+    else:
+        count = min(max(count, 1), 20)
+        wallets = add_qr_codes(generate_wallets(count))
+
+    return render_template(
+        "index.html",
+        wallets=wallets,
+        count=count,
+        error_message=error_message,
+        imported_message=imported_message,
+    )
+
+
+@app.get("/api/generate")
+def api_generate():
+    count = min(max(request.args.get("count", 1, type=int) or 1, 1), 20)
+    return jsonify({"wallets": add_qr_codes(generate_wallets(count))})
+
+
+@app.get("/api/validate")
+def api_validate():
+    address = request.args.get("address", "").strip()
+    return jsonify({"address": address, "valid": validate_bitcoin_address(address)})
+
+
+@app.get("/api/balance")
+def api_balance():
+    """Return an address balance from mempool.space without handling private keys."""
+    import urllib.error
+    import urllib.request
+
+    address = request.args.get("address", "").strip()
+    if not validate_bitcoin_address(address):
+        return jsonify({"error": "Invalid legacy Bitcoin address."}), 400
+
+    url = f"https://mempool.space/api/address/{address}"
     try:
-        return hashlib.new('ripemd160', data).digest()
-    except ValueError:
-        raise RuntimeError("RIPEMD160 is not available in this Python build.")
-
-
-def checksum(payload: bytes) -> bytes:
-    return sha256(sha256(payload).digest())[:4]
-
-
-def private_key_to_wif(priv_key: bytes, compressed: bool = True) -> str:
-    payload = b"\x80" + priv_key
-    if compressed:
-        payload += b"\x01"
-    return base58.b58encode(payload + checksum(payload)).decode()
-
-
-def private_key_to_address(priv_key: bytes) -> str:
-    sk = SigningKey.from_string(priv_key, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    pubkey = vk.to_string("compressed")
-    pubkey_hash = ripemd160(sha256(pubkey))
-    payload = b"\x00" + pubkey_hash
-    address = payload + checksum(payload)
-    return base58.b58encode(address).decode()
-
-
-def generate_random_private_key() -> bytes:
-    return os.urandom(32)
-
-
-def generate_wallet() -> dict:
-    private_key = generate_random_private_key()
-    return {
-        "private_key_hex": private_key.hex(),
-        "wif": private_key_to_wif(private_key),
-        "bitcoin_address": private_key_to_address(private_key),
-    }
-
-
-def generate_wallets(count: int = 1) -> list:
-    if count < 1:
-        raise ValueError("count must be at least 1")
-    return [generate_wallet() for _ in range(count)]
-
-
-def wallet_from_private_key_hex(private_key_hex: str) -> dict:
-    value = private_key_hex.strip()
-    if len(value) != 64:
-        raise ValueError("Private key must be exactly 64 hex characters.")
-
-    try:
-        private_key = bytes.fromhex(value)
-    except ValueError as exc:
-        raise ValueError("Private key is not valid hexadecimal.") from exc
-
-    return {
-        "private_key_hex": private_key.hex(),
-        "wif": private_key_to_wif(private_key),
-        "bitcoin_address": private_key_to_address(private_key),
-    }
-
-
-def wallet_from_wif(wif: str) -> dict:
-    value = wif.strip()
-    try:
-        decoded = base58.b58decode(value)
-    except ValueError as exc:
-        raise ValueError("WIF is not valid Base58.") from exc
-
-    if len(decoded) < 5:
-        raise ValueError("WIF is too short.")
-
-    payload = decoded[:-4]
-    expected_checksum = sha256(sha256(payload))[:4]
-    if decoded[-4:] != expected_checksum:
-        raise ValueError("WIF checksum is invalid.")
-
-    if payload[0] != 0x80:
-        raise ValueError("WIF version byte is invalid.")
-
-    private_key = payload[1:]
-    if len(private_key) == 33 and private_key[-1] == 0x01:
-        private_key = private_key[:-1]
-
-    if len(private_key) != 32:
-        raise ValueError("WIF private key length is invalid.")
-
-    return {
-        "private_key_hex": private_key.hex(),
-        "wif": private_key_to_wif(private_key),
-        "bitcoin_address": private_key_to_address(private_key),
-    }
-
-
-def validate_bitcoin_address(address: str) -> bool:
-    if not address or len(address) < 26 or len(address) > 35:
-        return False
-
-    try:
-        decoded = base58.b58decode(address)
-    except ValueError:
-        return False
-
-    if len(decoded) < 5:
-        return False
-
-    payload = decoded[:-4]
-    checksum = decoded[-4:]
-    expected_checksum = sha256(sha256(payload))[:4]
-    return checksum == expected_checksum
+        with urllib.request.urlopen(url, timeout=8) as response:
+            data = __import__("json").load(response)
+        chain = data.get("chain_stats", {})
+        mempool = data.get("mempool_stats", {})
+        confirmed = chain.get("funded_txo_sum", 0) - chain.get("spent_txo_sum", 0)
+        pending = mempool.get("funded_txo_sum", 0) - mempool.get("spent_txo_sum", 0)
+        return jsonify({
+            "address": address,
+            "confirmed_satoshis": confirmed,
+            "pending_satoshis": pending,
+            "confirmed_btc": confirmed / 100_000_000,
+            "pending_btc": pending / 100_000_000,
+            "source": "mempool.space",
+        })
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        return jsonify({"error": f"Balance lookup failed: {exc}"}), 502
 
 
 if __name__ == "__main__":
-    wallet = generate_wallet()
-    print("Private key (hex):", wallet["private_key_hex"])
-    print("WIF:", wallet["wif"])
-    print("Bitcoin address:", wallet["bitcoin_address"])
+    app.run(debug=True)
